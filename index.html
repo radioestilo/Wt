@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Motorola Global - Radio-1077c</title>
+    <title>Motorola Global System</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
         :root { --lcd-bg: #94b447; --lcd-text: #1a1f0e; --lcd-tx: #ffb100; }
         body { background: #121212; color: white; font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
-        .walkie-body { background: #2a2a2a; width: 310px; padding: 40px 20px; border-radius: 40px; border: 5px solid #111; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,0.8); border-bottom: 15px solid #1a1a1a; }
+        .walkie-body { background: #2a2a2a; width: 310px; padding: 40px 20px; border-radius: 40px; border: 5px solid #111; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
         .screen { background: var(--lcd-bg); border: 8px solid #1a1a1a; border-radius: 5px; padding: 15px; height: 100px; color: var(--lcd-text); display: flex; flex-direction: column; justify-content: center; transition: background 0.3s; box-shadow: inset 0 0 10px rgba(0,0,0,0.4); }
         .screen.transmitting { background: var(--lcd-tx); }
         #header-display { font-size: 1rem; font-weight: bold; margin: 0; text-transform: uppercase; white-space: nowrap; overflow: hidden; }
         #status-lcd { font-size: 0.8rem; margin-top: 5px; font-weight: bold; border-top: 1px solid rgba(0,0,0,0.2); padding-top: 5px; }
-        .setup-ui input { width: 100%; padding: 15px; margin: 15px 0; background: #000; border: 2px solid #444; color: #0f0; text-align: center; border-radius: 5px; font-family: inherit; font-size: 1.1rem; }
-        .btn-enter { width: 100%; padding: 15px; background: #333; color: #eee; border: none; font-weight: bold; cursor: pointer; border-radius: 5px; box-shadow: 0 4px #000; text-transform: uppercase; }
+        input { width: 100%; padding: 15px; margin: 15px 0; background: #000; border: 2px solid #444; color: #0f0; text-align: center; border-radius: 5px; font-family: inherit; font-size: 1.1rem; }
+        .btn-enter { width: 100%; padding: 15px; background: #333; color: #eee; border: none; font-weight: bold; cursor: pointer; border-radius: 5px; box-shadow: 0 4px #000; }
         #ptt { width: 160px; height: 160px; border-radius: 50%; background: radial-gradient(#800, #400); border: 10px solid #222; margin: 25px auto 0; display: none; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; box-shadow: 0 8px #111; }
         #ptt.ready { display: block; }
         #ptt:active { background: radial-gradient(#f00, #900); transform: translateY(4px); box-shadow: 0 2px #111; }
@@ -29,10 +29,10 @@
 <div class="walkie-body">
     <div class="led" id="tx-led"></div>
     <div class="screen" id="lcd">
-        <h2 id="header-display">SISTEMA OFF</h2>
+        <h2 id="header-display">MOTOROLA OFF</h2>
         <div id="status-lcd">INGRESE GRUPO</div>
     </div>
-    <div id="setup" class="setup-ui">
+    <div id="setup">
         <input type="text" id="room" placeholder="NOMBRE DEL GRUPO">
         <button class="btn-enter" onclick="iniciarRadio()">CONECTAR GLOBAL</button>
     </div>
@@ -42,7 +42,6 @@
 <div id="audios"></div>
 
 <script>
-    // TU CONFIGURACIÓN DE FIREBASE PERSONALIZADA
     const firebaseConfig = {
         apiKey: "AIzaSyDTydyoLDJHi-Mtf61IPkhzeHL_4GWAt7g",
         authDomain: "radio-1077c.firebaseapp.com",
@@ -55,41 +54,41 @@
 
     let peer, localStream, myRoom;
     let conexionesActivas = {};
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-    function bip(f, d) {
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-        o.connect(g); g.connect(audioCtx.destination);
-        o.frequency.value = f; g.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        o.start(); o.stop(audioCtx.currentTime + d);
-    }
 
     async function iniciarRadio() {
         myRoom = document.getElementById('room').value.trim().toUpperCase();
         if (!myRoom) return;
 
         try {
-            localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+            localStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+            });
             localStream.getAudioTracks()[0].enabled = false;
 
-            // PeerJS con servidores STUN para cruzar ciudades
-            peer = new Peer('MOTO-' + Math.random().toString(36).substr(2, 8), {
-                config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }, { 'urls': 'stun:stun1.l.google.com:19302' }] }
+            // CONFIGURACIÓN CON PUENTE TURN (CRÍTICO PARA CIUDADES DISTINTAS)
+            peer = new Peer('ID-' + Math.random().toString(36).substr(2, 8), {
+                config: {
+                    'iceServers': [
+                        { 'urls': 'stun:stun.l.google.com:19302' },
+                        { 'urls': 'stun:stun1.l.google.com:19302' },
+                        {
+                            'urls': 'turn:openrelay.metered.ca:443',
+                            'username': 'openrelayprovider',
+                            'credential': 'openrelayprovider'
+                        }
+                    ]
+                }
             });
 
             peer.on('open', (id) => {
                 document.getElementById('setup').style.display = 'none';
                 document.getElementById('ptt').classList.add('ready');
                 document.getElementById('header-display').innerText = myRoom;
-                bip(880, 0.1);
 
-                // Registro en TU Firebase
                 const ref = db.ref(`radio_rooms/${myRoom}`);
                 ref.child(id).set(true);
                 ref.child(id).onDisconnect().remove();
 
-                // Detección automática de amigos en cualquier ciudad
                 ref.on('child_added', snap => {
                     const remoteId = snap.key;
                     if (remoteId !== id && !conexionesActivas[remoteId]) {
@@ -104,21 +103,21 @@
                 vincular(call);
             });
 
-        } catch (e) { alert("Error: Use HTTPS y permita el micrófono."); }
+        } catch (e) { alert("Error de micrófono. Use HTTPS."); }
     }
 
     function vincular(call) {
         call.on('stream', stream => {
             if (!conexionesActivas[call.peer]) {
                 const audio = document.createElement('audio');
-                audio.srcObject = stream; audio.autoplay = true; audio.playsinline = true;
+                audio.srcObject = stream;
+                audio.autoplay = true;
+                audio.playsinline = true;
                 document.getElementById('audios').appendChild(audio);
-                conexionesActivas[call.peer] = call;
+                conexionesActivas[call.peer] = true;
                 actualizarPantalla();
-                bip(1200, 0.1); // Bip de contacto
             }
         });
-        call.on('close', () => { delete conexionesActivas[call.peer]; actualizarPantalla(); });
     }
 
     function actualizarPantalla() {
@@ -132,7 +131,6 @@
             document.getElementById('tx-led').classList.toggle('on', on);
             document.getElementById('lcd').classList.toggle('transmitting', on);
             document.getElementById('status-lcd').innerText = on ? "TRANSMITIENDO..." : `${Object.keys(conexionesActivas).length + 1} EN LINEA`;
-            bip(on ? 600 : 300, 0.05);
         }
     }
 </script>
