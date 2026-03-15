@@ -29,12 +29,12 @@
 <div class="walkie-body">
     <div class="led" id="tx-led"></div>
     <div class="screen" id="lcd">
-        <h2 id="header-display">MOTOROLA OFF</h2>
+        <h2 id="header-display">SISTEMA OFF</h2>
         <div id="status-lcd">INGRESE GRUPO</div>
     </div>
     <div id="setup">
         <input type="text" id="room" placeholder="NOMBRE DEL GRUPO">
-        <button class="btn-enter" onclick="iniciarRadio()">CONECTAR GLOBAL</button>
+        <button class="btn-enter" onclick="iniciarRadio()">CONECTAR RED GLOBAL</button>
     </div>
     <button id="ptt" onmousedown="hablar(true)" onmouseup="hablar(false)" ontouchstart="hablar(true)" ontouchend="hablar(false)"></button>
 </div>
@@ -42,6 +42,7 @@
 <div id="audios"></div>
 
 <script>
+    // TU CONFIGURACIÓN DE FIREBASE
     const firebaseConfig = {
         apiKey: "AIzaSyDTydyoLDJHi-Mtf61IPkhzeHL_4GWAt7g",
         authDomain: "radio-1077c.firebaseapp.com",
@@ -60,17 +61,19 @@
         if (!myRoom) return;
 
         try {
+            // Solicitar audio con máxima compatibilidad
             localStream = await navigator.mediaDevices.getUserMedia({ 
                 audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
             });
             localStream.getAudioTracks()[0].enabled = false;
 
-            // CONFIGURACIÓN CON PUENTE TURN (CRÍTICO PARA CIUDADES DISTINTAS)
-            peer = new Peer('ID-' + Math.random().toString(36).substr(2, 8), {
+            // CONFIGURACIÓN DE PUENTE GLOBAL (STUN + TURN GRATUITO)
+            peer = new Peer('MOTO-' + Math.random().toString(36).substr(2, 8), {
                 config: {
                     'iceServers': [
                         { 'urls': 'stun:stun.l.google.com:19302' },
                         { 'urls': 'stun:stun1.l.google.com:19302' },
+                        // Este servidor TURN ayuda a cruzar entre ciudades/4G
                         {
                             'urls': 'turn:openrelay.metered.ca:443',
                             'username': 'openrelayprovider',
@@ -103,7 +106,7 @@
                 vincular(call);
             });
 
-        } catch (e) { alert("Error de micrófono. Use HTTPS."); }
+        } catch (e) { alert("Acceso al micro denegado. Use HTTPS."); }
     }
 
     function vincular(call) {
@@ -112,12 +115,13 @@
                 const audio = document.createElement('audio');
                 audio.srcObject = stream;
                 audio.autoplay = true;
-                audio.playsinline = true;
+                audio.playsinline = true; // Crítico para móviles
                 document.getElementById('audios').appendChild(audio);
-                conexionesActivas[call.peer] = true;
+                conexionesActivas[call.peer] = call;
                 actualizarPantalla();
             }
         });
+        call.on('close', () => { delete conexionesActivas[call.peer]; actualizarPantalla(); });
     }
 
     function actualizarPantalla() {
