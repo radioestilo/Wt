@@ -2,149 +2,121 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Radio Global Pro</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radio Walkie-Talkie | Agora</title>
     <style>
-        :root { --p: #00ff41; --bg: #0d0d0d; }
-        body { background: var(--bg); color: var(--p); font-family: 'Courier New', monospace; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
-        .case { border: 3px solid #333; border-radius: 30px; width: 320px; padding: 25px; background: #1a1a1a; box-shadow: 0 0 30px rgba(0,0,0,0.5); text-align: center; position: relative; }
-        .screen { background: #222; border: 5px solid #111; border-radius: 10px; padding: 15px; margin-bottom: 20px; color: var(--p); min-height: 60px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        input { width: 100%; padding: 12px; background: #000; border: 1px solid var(--p); color: var(--p); border-radius: 5px; margin-bottom: 10px; text-align: center; }
-        .btn-link { width: 100%; padding: 15px; background: var(--p); color: #000; border: none; font-weight: bold; border-radius: 5px; cursor: pointer; }
-        #ptt { 
-            width: 170px; height: 170px; border-radius: 50%; background: radial-gradient(#333, #111); border: 8px solid #000; 
-            margin: 10px auto; display: none; color: #555; font-size: 1rem; cursor: pointer;
-            -webkit-tap-highlight-color: transparent; user-select: none; box-shadow: 0 5px 0 #000;
+        :root { --primary: #ff3e3e; --bg: #1a1a1d; }
+        body { background: var(--bg); color: white; font-family: 'Courier New', Courier, monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
+        
+        #ptt-btn {
+            width: 240px; height: 240px; border-radius: 50%; border: 12px solid #333;
+            background: radial-gradient(circle, var(--primary) 0%, #a31d1d 100%);
+            color: white; font-size: 1.4rem; font-weight: bold; cursor: pointer;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6); outline: none; transition: all 0.1s;
+            user-select: none; -webkit-tap-highlight-color: transparent;
         }
-        #ptt.ready { display: block; color: var(--p); }
-        #ptt:active { background: #f00; transform: translateY(4px); box-shadow: 0 1px 0 #000; color: white; }
-        .indicator { width: 12px; height: 12px; background: #400; border-radius: 50%; position: absolute; top: 15px; right: 30px; }
-        .indicator.on { background: #f00; box-shadow: 0 0 10px #f00; }
+
+        #ptt-btn:active { transform: scale(0.92); filter: brightness(1.3); box-shadow: 0 0 50px var(--primary); }
+        
+        .led { width: 15px; height: 15px; border-radius: 50%; background: #444; margin-bottom: 20px; transition: 0.3s; }
+        .led.active { background: #00ff41; box-shadow: 0 0 15px #00ff41; }
+        .led.transmitting { background: #ff3e3e; box-shadow: 0 0 15px #ff3e3e; }
+
+        .status-text { margin-top: 15px; text-transform: uppercase; letter-spacing: 2px; font-size: 0.8rem; color: #888; }
     </style>
 </head>
 <body>
 
-<div class="case">
-    <div class="indicator" id="led"></div>
-    <div class="screen" id="status">RADIO APAGADA</div>
-    
-    <div id="ui-login">
-        <input type="text" id="canal" placeholder="NOMBRE DEL GRUPO">
-        <button class="btn-link" onclick="conectar()">CONECTAR A RED GLOBAL</button>
-    </div>
+    <div id="led" class="led"></div>
+    <button id="ptt-btn">CONECTANDO...</button>
+    <div id="status" class="status-text">Iniciando sistema de radio...</div>
 
-    <button id="ptt">PTT</button>
-    <div id="count" style="font-size: 0.7rem; margin-top: 10px; opacity: 0.6;"></div>
-</div>
+    <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
 
-<div id="audio-box"></div>
+    <script>
+        const APP_ID = "eeb52729cbdb4c80a1710e32af5306ca"; // Tu ID integrada
+        const CHANNEL = "sala-general"; 
+        const TOKEN = null;
 
-<script>
-    // Configuración de tu Firebase
-    const firebaseConfig = {
-        apiKey: "AIzaSyDTydyoLDJHi-Mtf61IPkhzeHL_4GWAt7g",
-        authDomain: "radio-1077c.firebaseapp.com",
-        databaseURL: "https://radio-1077c-default-rtdb.firebaseio.com",
-        projectId: "radio-1077c",
-        appId: "1:955699604469:web:ee162a8f7920cee4844ebc"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+        const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+        let localAudioTrack = null;
+        
+        const btn = document.getElementById('ptt-btn');
+        const status = document.getElementById('status');
+        const led = document.getElementById('led');
 
-    let peer, localStream, room;
-    let peersActivos = {};
+        // Función para el sonido de "Roger" (Pitido de radio)
+        function playRogerBeep() {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime); // Tono agudo
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.2);
+        }
 
-    async function conectar() {
-        room = document.getElementById('canal').value.trim().toLowerCase();
-        if(!room) return;
-
-        try {
-            // Capturar audio con configuración para red móvil
-            localStream = await navigator.mediaDevices.getUserMedia({ 
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
-            });
-            localStream.getAudioTracks()[0].enabled = false;
-
-            // CONFIGURACIÓN DE CRUCE DE OPERADORES (TURN)
-            // Usamos un servidor "Relé" que transporta la voz cuando el 4G bloquea el paso directo
-            peer = new Peer('RAD-' + Math.random().toString(36).substr(2, 6), {
-                config: {
-                    'iceServers': [
-                        { 'urls': 'stun:stun.l.google.com:19302' },
-                        { 
-                            'urls': 'turn:openrelay.metered.ca:443', 
-                            'username': 'openrelayprovider', 
-                            'credential': 'openrelayprovider' 
-                        }
-                    ],
-                    'sdpSemantics': 'unified-plan'
-                }
-            });
-
-            peer.on('open', (id) => {
-                document.getElementById('ui-login').style.display = 'none';
-                document.getElementById('ptt').classList.add('ready');
-                document.getElementById('status').innerText = "EN LÍNEA: " + room.toUpperCase();
+        async function initRadio() {
+            try {
+                await client.join(APP_ID, CHANNEL, TOKEN, null);
+                localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
                 
-                const ref = db.ref('global_radio/' + room);
-                ref.child(id).set(true);
-                ref.child(id).onDisconnect().remove();
+                // IMPORTANTE: Empezamos con el micro silenciado
+                await localAudioTrack.setEnabled(false);
+                await client.publish(localAudioTrack);
 
-                ref.on('child_added', snap => {
-                    if (snap.key !== id && !peersActivos[snap.key]) {
-                        hacerLlamada(snap.key);
-                    }
-                });
-            });
+                btn.innerText = "MANTÉN PULSADO";
+                led.classList.add('online');
+                status.innerText = "En línea - Canal: " + CHANNEL;
+            } catch (e) {
+                status.innerText = "Error: Permite el uso del micrófono";
+                console.error(e);
+            }
+        }
 
-            peer.on('call', call => {
-                call.answer(localStream);
-                recibirLlamada(call);
-            });
-
-        } catch (e) { alert("Error: Activa el micro y usa HTTPS"); }
-    }
-
-    function hacerLlamada(peerId) {
-        const call = peer.call(peerId, localStream);
-        recibirLlamada(call);
-    }
-
-    function recibirLlamada(call) {
-        call.on('stream', stream => {
-            if (!peersActivos[call.peer]) {
-                const audio = document.createElement('audio');
-                audio.srcObject = stream;
-                audio.autoplay = true;
-                audio.playsinline = true;
-                document.getElementById('audio-box').appendChild(audio);
-                peersActivos[call.peer] = true;
-                actualizarContador();
+        // Suscribirse a otros amigos cuando hablen
+        client.on("user-published", async (user, mediaType) => {
+            await client.subscribe(user, mediaType);
+            if (mediaType === "audio") {
+                user.audioTrack.play();
+                led.classList.add('active'); // Se enciende cuando escuchas a alguien
             }
         });
-        call.on('close', () => { delete peersActivos[call.peer]; actualizarContador(); });
-    }
 
-    function actualizarContador() {
-        const n = Object.keys(peersActivos).length;
-        document.getElementById('count').innerText = (n + 1) + " EQUIPOS EN LA RED";
-    }
+        client.on("user-unpublished", () => {
+            led.classList.remove('active');
+            playRogerBeep(); // Suena cuando el otro deja de hablar
+        });
 
-    const btn = document.getElementById('ptt');
-    function hablar(on) {
-        if (localStream) {
-            localStream.getAudioTracks()[0].enabled = on;
-            document.getElementById('led').classList.toggle('on', on);
-            document.getElementById('status').innerText = on ? "TRANSMITIENDO..." : "EN LÍNEA: " + room.toUpperCase();
-            document.getElementById('status').style.color = on ? "#f00" : "#00ff41";
-        }
-    }
+        // Lógica de Transmisión
+        const startTalking = async () => {
+            if (!localAudioTrack) return;
+            await localAudioTrack.setEnabled(true);
+            btn.innerText = "TRANSMITIENDO";
+            led.classList.add('transmitting');
+            status.innerText = "Tu voz está en el aire...";
+        };
 
-    btn.onmousedown = btn.ontouchstart = (e) => { e.preventDefault(); hablar(true); };
-    btn.onmouseup = btn.ontouchend = (e) => { e.preventDefault(); hablar(false); };
-</script>
+        const stopTalking = async () => {
+            if (!localAudioTrack) return;
+            await localAudioTrack.setEnabled(false);
+            btn.innerText = "MANTÉN PULSADO";
+            led.classList.remove('transmitting');
+            status.innerText = "Cambio y corto.";
+            playRogerBeep();
+        };
+
+        // Eventos
+        btn.onmousedown = startTalking;
+        btn.onmouseup = stopTalking;
+        btn.ontouchstart = (e) => { e.preventDefault(); startTalking(); };
+        btn.ontouchend = (e) => { e.preventDefault(); stopTalking(); };
+
+        initRadio();
+    </script>
 </body>
 </html>
