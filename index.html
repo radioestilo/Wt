@@ -3,45 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Radio Scanner Global</title>
+    <title>Radio Global V3</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
-        body { font-family: 'Courier New', monospace; background: #0a0a0a; color: #0f0; text-align: center; margin: 0; padding: 20px; }
-        .container { border: 2px solid #0f0; padding: 20px; border-radius: 15px; max-width: 350px; margin: auto; box-shadow: 0 0 15px #0f0; }
-        input { width: 100%; padding: 12px; margin: 10px 0; background: #000; border: 1px solid #0f0; color: #0f0; text-align: center; border-radius: 5px; font-size: 1rem; }
-        .btn { width: 100%; padding: 15px; background: #0f0; color: #000; border: none; font-weight: bold; cursor: pointer; border-radius: 5px; margin-top: 10px; }
+        :root { --neon: #00ff41; --bg: #050505; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--neon); text-align: center; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        .panel { border: 2px solid var(--neon); padding: 30px; border-radius: 20px; width: 90%; max-width: 400px; box-shadow: 0 0 20px rgba(0,255,65,0.2); }
+        input { width: 100%; padding: 15px; margin: 10px 0; background: #000; border: 1px solid var(--neon); color: var(--neon); border-radius: 10px; font-size: 1.2rem; text-align: center; box-sizing: border-box; }
+        .btn-link { width: 100%; padding: 15px; background: var(--neon); color: #000; border: none; font-weight: bold; border-radius: 10px; cursor: pointer; font-size: 1rem; }
         #ptt { 
-            width: 180px; height: 180px; border-radius: 50%; background: #222; color: #444; 
-            font-size: 1.2rem; margin: 30px auto; border: 10px solid #111; display: none;
+            width: 200px; height: 200px; border-radius: 50%; background: #111; 
+            border: 8px solid #222; margin: 20px auto; display: none;
+            color: #444; font-weight: bold; font-size: 1.2rem;
             user-select: none; -webkit-tap-highlight-color: transparent;
+            transition: all 0.2s;
         }
-        #ptt.ready { display: block; border-color: #333; color: #0f0; }
-        #ptt:active { background: #f00; color: #fff; box-shadow: 0 0 40px #f00; transform: scale(0.92); }
-        .status-box { font-size: 0.8rem; margin: 10px 0; color: #ff9d00; border: 1px dashed #444; padding: 10px; }
+        #ptt.active { display: block; border-color: #00ff41; color: var(--neon); box-shadow: 0 0 15px rgba(0,255,65,0.3); }
+        #ptt:active { background: #f00; color: #fff; border-color: #500; transform: scale(0.95); box-shadow: 0 0 30px #f00; }
+        .info { font-size: 0.9rem; margin: 10px 0; color: #888; }
+        #log { font-size: 0.7rem; color: #555; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2 style="margin-top:0">MODO INTERNET</h2>
-    <div id="setup">
-        <input type="text" id="room" placeholder="Nombre del Grupo">
-        <input type="number" id="my-slot" placeholder="Canal (1-20)" min="1" max="20">
-        <button class="btn" onclick="iniciarRadio()">CONECTAR RED MÓVIL/WIFI</button>
+<div class="panel">
+    <h1 style="margin-top:0; font-size: 1.5rem;">RADIO GLOBAL V3</h1>
+    
+    <div id="login">
+        <input type="text" id="roomName" placeholder="NOMBRE DEL GRUPO">
+        <button class="btn-link" onclick="conectar()">ESTABLECER CONEXIÓN</button>
+        <p class="info">Usa el mismo nombre de grupo con tus amigos.</p>
     </div>
-    <div id="radio-ui" style="display:none">
-        <div id="status" class="status-box">ESTADO: SINCRONIZANDO...</div>
-        <div id="user-count" style="font-size: 0.8rem; color: #888;">0 Compañeros</div>
-        <button id="ptt">PULSAR</button>
+
+    <div id="radio-controls" style="display:none">
+        <div id="status">INICIALIZANDO...</div>
+        <div id="peer-count" style="margin-bottom: 15px;">Conectando a la red...</div>
+        <button id="ptt">PULSAR PARA HABLAR</button>
+        <div id="log">Esperando señal de audio...</div>
     </div>
 </div>
 
-<div id="audios"></div>
+<div id="remote-audios"></div>
 
 <script>
-    // USANDO TUS CREDENCIALES DE BODEGA VIRTUAL
+    // TU CONFIGURACIÓN DE FIREBASE
     const firebaseConfig = {
         apiKey: "AIzaSyD73Fli73cewNUX-Rj6YeZKlb97AcMrqL0",
         authDomain: "bodega-virtual-3e69b.firebaseapp.com",
@@ -52,89 +59,107 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    let peer, localStream, myRoom;
-    let conexiones = {};
+    let peer, localStream, room;
+    let activeConnections = {};
 
-    async function iniciarRadio() {
-        myRoom = document.getElementById('room').value.trim().toLowerCase();
-        const slot = document.getElementById('my-slot').value;
-        if (!myRoom || !slot) return alert("Ingresa grupo y canal");
+    async function conectar() {
+        room = document.getElementById('roomName').value.trim().toLowerCase();
+        if(!room) return alert("Escribe un nombre de grupo");
 
         try {
-            // Activar audio con configuraciones de reducción de ruido
+            // Captura de audio optimizada
             localStream = await navigator.mediaDevices.getUserMedia({ 
-                audio: { echoCancellation: true, noiseSuppression: true } 
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
             });
             localStream.getAudioTracks()[0].enabled = false;
 
-            // CONFIGURACIÓN DE CRUCE DE REDES (STUN/TURN)
-            // Esto permite que el audio pase de WiFi a Datos Móviles sin problema
-            peer = new Peer(`RAD-${myRoom}-${slot}`, {
-                config: { 'iceServers': [
-                    { 'urls': 'stun:stun.l.google.com:19302' },
-                    { 
-                        'urls': 'turn:openrelay.metered.ca:443', 
-                        'username': 'openrelayprovider', 
-                        'credential': 'openrelayprovider' 
-                    }
-                ]}
+            document.getElementById('login').style.display = 'none';
+            document.getElementById('radio-controls').style.display = 'block';
+
+            // Configuración con SERVIDORES TURN (Puentes para 4G y ciudades)
+            peer = new Peer('ID-' + Math.random().toString(36).substr(2, 9), {
+                config: {
+                    'iceServers': [
+                        { 'urls': 'stun:stun.l.google.com:19302' },
+                        { 'urls': 'turn:openrelay.metered.ca:443', 'username': 'openrelayprovider', 'credential': 'openrelayprovider' }
+                    ]
+                }
             });
 
             peer.on('open', (id) => {
-                document.getElementById('setup').style.display = 'none';
-                document.getElementById('radio-ui').style.display = 'block';
-                document.getElementById('status').innerText = "SINTONIZANDO RED...";
+                document.getElementById('status').innerText = "ONLINE - GRUPO: " + room.toUpperCase();
+                document.getElementById('ptt').classList.add('active');
+                
+                const roomRef = db.ref(`radio_v3/${room}`);
+                roomRef.child(id).set(true);
+                roomRef.child(id).onDisconnect().remove();
 
-                const ref = db.ref(`radio_rooms/${myRoom}`);
-                ref.child(id).set(true);
-                ref.child(id).onDisconnect().remove();
-
-                ref.on('child_added', snap => {
-                    if (snap.key !== id && !conexiones[snap.key]) {
-                        const call = peer.call(snap.key, localStream);
-                        vincular(call);
+                // Detección automática de compañeros
+                roomRef.on('child_added', snap => {
+                    const peerId = snap.key;
+                    if (peerId !== id && !activeConnections[peerId]) {
+                        console.log("Llamando a:", peerId);
+                        const call = peer.call(peerId, localStream);
+                        manejarLlamada(call);
                     }
                 });
             });
 
             peer.on('call', call => {
                 call.answer(localStream);
-                vincular(call);
+                manejarLlamada(call);
             });
 
-        } catch (e) { alert("Error: Acceso al micrófono denegado o conexión no segura (HTTPS)."); }
-    }
-
-    function vincular(call) {
-        call.on('stream', stream => {
-            if (!conexiones[call.peer]) {
-                const audio = document.createElement('audio');
-                audio.srcObject = stream; audio.autoplay = true; audio.playsinline = true;
-                document.getElementById('audios').appendChild(audio);
-                conexiones[call.peer] = true;
-                actualizarUI();
-            }
-        });
-        call.on('close', () => { delete conexiones[call.peer]; actualizarUI(); });
-    }
-
-    function actualizarUI() {
-        const total = Object.keys(conexiones).length;
-        document.getElementById('user-count').innerText = `${total} Compañeros conectados`;
-        document.getElementById('status').innerText = total > 0 ? "SEÑAL RECIBIDA" : "ESCANEANDO...";
-        document.getElementById('ptt').classList.add('ready');
-    }
-
-    const ptt = document.getElementById('ptt');
-    function hablar(on) {
-        if (localStream) {
-            localStream.getAudioTracks()[0].enabled = on;
-            document.getElementById('status').innerText = on ? "TRANSMITIENDO..." : "SEÑAL RECIBIDA";
-            document.getElementById('status').style.color = on ? "#f00" : "#0f0";
+        } catch (err) {
+            alert("Error: Activa el micrófono y usa HTTPS.");
+            console.error(err);
         }
     }
-    ptt.onmousedown = ptt.ontouchstart = (e) => { e.preventDefault(); hablar(true); };
-    ptt.onmouseup = ptt.ontouchend = (e) => { e.preventDefault(); hablar(false); };
+
+    function manejarLlamada(call) {
+        call.on('stream', remoteStream => {
+            if (!activeConnections[call.peer]) {
+                const audio = document.createElement('audio');
+                audio.srcObject = remoteStream;
+                audio.autoplay = true;
+                audio.playsinline = true;
+                document.getElementById('remote-audios').appendChild(audio);
+                activeConnections[call.peer] = call;
+                
+                // Forzar reproducción por políticas de navegador
+                audio.play().catch(() => {
+                    document.getElementById('log').innerText = "Toca la pantalla para activar sonido";
+                });
+                
+                actualizarContador();
+            }
+        });
+
+        call.on('close', () => {
+            delete activeConnections[call.peer];
+            actualizarContador();
+        });
+    }
+
+    function actualizarContador() {
+        const count = Object.keys(activeConnections).length;
+        document.getElementById('peer-count').innerText = (count + 1) + " Equipos en la red";
+        document.getElementById('log').innerText = count > 0 ? "Enlace establecido" : "Esperando a otros...";
+    }
+
+    // Lógica del botón PTT
+    const btn = document.getElementById('ptt');
+    function toggleMic(on) {
+        if (localStream) {
+            localStream.getAudioTracks()[0].enabled = on;
+            document.getElementById('status').innerText = on ? "🔴 TRANSMITIENDO..." : "ONLINE - GRUPO: " + room.toUpperCase();
+            document.getElementById('status').style.color = on ? "#f00" : "#00ff41";
+        }
+    }
+
+    btn.onmousedown = btn.ontouchstart = (e) => { e.preventDefault(); toggleMic(true); };
+    btn.onmouseup = btn.ontouchend = (e) => { e.preventDefault(); toggleMic(false); };
+
 </script>
 </body>
 </html>
