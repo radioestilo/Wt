@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Radio Comms Ultra</title>
+    <title>Radio Comms Ultra v4.5</title>
     <style>
         :root { --danger: #ff4b2b; --success: #00ff41; --dark: #0f0f0f; --neon: #00d4ff; }
         body { background: var(--dark); color: white; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; touch-action: none; overflow: hidden; }
 
         .radio-container { position: relative; width: 300px; height: 450px; background: #222; border-radius: 40px; border: 4px solid #333; display: flex; flex-direction: column; align-items: center; padding: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
 
-        /* Pantalla mejorada */
         #display { width: 85%; height: 80px; background: #0a1a0a; border: 2px solid #333; border-radius: 10px; margin-bottom: 20px; padding: 10px; color: var(--success); font-family: monospace; font-size: 0.75rem; box-shadow: inset 0 0 15px #000; display: flex; flex-direction: column; justify-content: space-between; }
 
         .user-count { color: var(--neon); font-weight: bold; font-size: 0.8rem; }
@@ -33,7 +32,7 @@
             <div class="user-count">EN LÍNEA: <span id="counter">0</span></div>
         </div>
         <button id="ptt-btn">ENCENDER</button>
-        <p style="font-size: 0.6rem; color: #555; margin-top: 30px;">SECURE COMMS v4.0</p>
+        <p style="font-size: 0.6rem; color: #555; margin-top: 30px;">SECURE COMMS v4.5 | REPEATER MODE</p>
     </div>
 
     <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
@@ -51,52 +50,49 @@
         let localAudioTrack = null;
         let isOnline = false;
 
-        // --- SISTEMA DE SONIDOS ---
-        function playSound(freq, vol, dur) {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const o = ctx.createOscillator();
-            const g = ctx.createGain();
-            o.connect(g); g.connect(ctx.destination);
-            o.frequency.value = freq;
-            g.gain.setValueAtTime(vol, ctx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
-            o.start(); o.stop(ctx.currentTime + dur);
+        // --- SISTEMA DE AUDIO (SINTETIZADOR) ---
+        function playTone(freq, vol, dur) {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const o = ctx.createOscillator();
+                const g = ctx.createGain();
+                o.connect(g); g.connect(ctx.destination);
+                o.frequency.value = freq;
+                g.gain.setValueAtTime(vol, ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+                o.start(); o.stop(ctx.currentTime + dur);
+            } catch(e) { console.error("Audio error"); }
         }
 
-        // Pitido fuerte para nuevos usuarios
-        function playAlertJoin() {
-            playSound(1200, 0.4, 0.5); // Tono alto y fuerte
+        // Tono de Repetidor Analógico (Roger Beep clásico)
+        function playCourtesyTone() {
+            // Un tono de 880Hz (agudo) durante 150ms suena como repetidor real
+            playTone(880, 0.1, 0.15); 
         }
 
-        // --- SISTEMA DE NOTIFICACIONES ---
+        // --- NOTIFICACIONES ---
         async function requestNotifyPermission() {
-            if ("Notification" in window) {
-                await Notification.requestPermission();
-            }
+            if ("Notification" in window) await Notification.requestPermission();
         }
 
         function sendNotification(title, body) {
-            // Solo avisar si la app no está visible
             if (document.visibilityState === "hidden" && Notification.permission === "granted") {
-                new Notification(title, { body: body, icon: 'https://cdn-icons-png.flaticon.com/512/1082/1082810.png' });
+                new Notification(title, { body: body });
             }
         }
 
-        // --- LÓGICA DE USUARIOS ---
+        // --- CONTEO ---
         function updatePeerCount() {
-            // Usuarios remotos + tú
-            const total = client.remoteUsers.length + 1;
-            counterText.innerText = total;
+            counterText.innerText = client.remoteUsers.length + 1;
         }
 
         async function bootSystem() {
             try {
                 statusLine.innerText = "CONECTANDO...";
                 await requestNotifyPermission();
-                
                 await client.join(APP_ID, CHANNEL, null, null);
-                localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({ AEC: true, ANS: true });
                 
+                localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({ AEC: true, ANS: true });
                 await client.publish(localAudioTrack);
                 await localAudioTrack.setEnabled(false);
 
@@ -106,28 +102,22 @@
                 led.classList.add('led-on');
                 statusLine.innerText = "CANAL: GENERAL";
                 updatePeerCount();
-                playSound(880, 0.1, 0.2);
+                playTone(440, 0.1, 0.2); // Tono de encendido
 
             } catch (err) {
-                statusLine.innerText = "ERROR: " + err.message.substring(0, 15);
+                statusLine.innerText = "ERROR: PERMISO DENIEG.";
                 btn.innerText = "REINTENTAR";
             }
         }
 
-        // EVENTOS DE RED (AGORA)
-        client.on("user-joined", (user) => {
+        // --- EVENTOS DE AGORA ---
+        client.on("user-joined", () => {
             updatePeerCount();
-            playAlertJoin(); // Pitido fuerte
-            sendNotification("Radio Alerta", "Un nuevo integrante se ha unido al canal.");
-            statusLine.innerText = "NUEVO USUARIO ENTRÓ";
-            setTimeout(() => { if(isOnline) statusLine.innerText = "CANAL: GENERAL"; }, 3000);
+            playTone(1200, 0.2, 0.3); // Alerta de nuevo integrante
+            sendNotification("Radio", "Alguien entró a la frecuencia.");
         });
 
-        client.on("user-left", (user) => {
-            updatePeerCount();
-            statusLine.innerText = "USUARIO SALIÓ";
-            setTimeout(() => { if(isOnline) statusLine.innerText = "CANAL: GENERAL"; }, 3000);
-        });
+        client.on("user-left", () => updatePeerCount());
 
         client.on("user-published", async (user, mediaType) => {
             await client.subscribe(user, mediaType);
@@ -137,22 +127,29 @@
             }
         });
 
-        // LÓGICA PUSH TO TALK
+        // ESTA ES LA CLAVE: Detecta cuando el OTRO deja de hablar
+        client.on("user-unpublished", (user, mediaType) => {
+            if (mediaType === "audio") {
+                statusLine.innerText = "CANAL: GENERAL";
+                playCourtesyTone(); // <--- Aquí suena el tono de repetidor para los que escuchan
+            }
+        });
+
+        // --- LÓGICA PTT ---
         btn.onpointerdown = async (e) => {
             if (!isOnline) { await bootSystem(); return; }
             e.preventDefault();
             await localAudioTrack.setEnabled(true);
             btn.classList.add('active');
             statusLine.innerText = "TRANSMITIENDO...";
-            playSound(600, 0.05, 0.1);
         };
 
         btn.onpointerup = async () => {
             if (!isOnline) return;
             await localAudioTrack.setEnabled(false);
             btn.classList.remove('active');
-            statusLine.innerText = "CANAL: *Club 24";
-            playSound(440, 0.1, 0.2);
+            statusLine.innerText = "CANAL: GENERAL";
+            playCourtesyTone(); // <--- Tono local para confirmar cierre
         };
 
         btn.onpointerleave = btn.onpointerup;
