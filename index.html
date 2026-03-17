@@ -2,89 +2,98 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Walkie-Talkie Fix</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Walkie-Talkie Debug</title>
     <style>
-        body { background: #121212; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        #ptt-btn {
-            width: 200px; height: 200px; border-radius: 50%; border: 8px solid #333;
-            background: #444; color: #888; font-size: 1.2rem; font-weight: bold;
-            cursor: pointer; transition: 0.2s; outline: none;
-        }
-        /* Clase cuando el sistema está listo */
-        .ready { background: #e74c3c !important; color: white !important; border-color: #555 !important; box-shadow: 0 0 20px rgba(231,76,60,0.4); }
-        .active { transform: scale(0.9); filter: brightness(1.2); box-shadow: 0 0 40px #ff4d4d !important; }
+        body { background: #1a1a1a; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; touch-action: none; }
         
-        #status { margin-top: 20px; font-size: 0.9rem; color: #aaa; text-align: center; padding: 0 20px; }
-        .error-msg { color: #ff4d4d; font-weight: bold; border: 1px solid #ff4d4d; padding: 10px; border-radius: 5px; margin-top: 10px; display: none; }
+        #ptt-btn {
+            width: 200px; height: 200px; border-radius: 50%; border: 10px solid #333;
+            background: #555; color: white; font-size: 1.2rem; font-weight: bold;
+            cursor: pointer; user-select: none; outline: none; -webkit-tap-highlight-color: transparent;
+        }
+
+        .ready { background: #ff4b2b !important; box-shadow: 0 0 20px rgba(255, 75, 43, 0.5); }
+        .talking { background: #00ff41 !important; transform: scale(0.95); box-shadow: 0 0 40px #00ff41; }
+
+        #log { 
+            margin-top: 20px; font-size: 0.8rem; color: #00ff41; 
+            background: black; padding: 10px; width: 80%; height: 100px; 
+            overflow-y: auto; border: 1px solid #333; font-family: monospace;
+        }
     </style>
 </head>
 <body>
 
-    <button id="ptt-btn">CLIC PARA ENCENDER RADIO</button>
-    
-    <div id="status">El sistema está apagado. Toca el botón para iniciar.</div>
-    <div id="error-box" class="error-msg"></div>
+    <button id="ptt-btn">CARGANDO...</button>
+    <div id="log">Iniciando sistema...</div>
 
     <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
 
     <script>
         const APP_ID = "eeb52729cbdb4c80a1710e32af5306ca";
-        const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
-        let localAudioTrack = null;
-        let isReady = false;
-
+        const logDiv = document.getElementById('log');
         const btn = document.getElementById('ptt-btn');
-        const status = document.getElementById('status');
-        const errorBox = document.getElementById('error-box');
 
-        // PASO 1: ACTIVACIÓN POR CLIC (Obligatorio por seguridad)
-        btn.onclick = async () => {
-            if (isReady) return; // Si ya está listo, no hace nada el clic simple
+        function print(msg) {
+            logDiv.innerHTML += "> " + msg + "<br>";
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
 
+        let client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+        let localTrack = null;
+        let isJoined = false;
+
+        async function init() {
             try {
-                status.innerText = "Solicitando micrófono...";
+                print("Conectando a Agora...");
+                await client.join(APP_ID, "test-channel", null, null);
+                isJoined = true;
                 
-                // Unirse al canal
-                await client.join(APP_ID, "sala-general", null, null);
+                print("Pidiendo permiso de micro...");
+                localTrack = await AgoraRTC.createMicrophoneAudioTrack();
+                await localTrack.setEnabled(false);
+                await client.publish(localTrack);
                 
-                // Crear track de audio (Aquí saltará el cartel de "Permitir")
-                localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-                await localAudioTrack.setEnabled(false);
-                await client.publish(localAudioTrack);
-
-                // Configurar interfaz lista
-                isReady = true;
                 btn.innerText = "MANTÉN PULSADO";
                 btn.classList.add('ready');
-                status.innerText = "¡CONECTADO! Ya puedes hablar.";
-                errorBox.style.display = "none";
-
-            } catch (e) {
-                console.error(e);
-                errorBox.style.display = "block";
-                if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-                    errorBox.innerText = "ERROR: Necesitas usar HTTPS o LOCALHOST para que el micrófono funcione.";
-                } else {
-                    errorBox.innerText = "ERROR: No diste permiso al micrófono. Recarga la página e inténtalo de nuevo.";
-                }
+                print("¡LISTO! Ya puedes hablar.");
+            } catch (err) {
+                print("ERROR: " + err.message);
             }
-        };
+        }
 
-        // PASO 2: LÓGICA DE HABLAR (Solo después de estar listos)
-        const hablar = async () => { if (isReady) { await localAudioTrack.setEnabled(true); btn.classList.add('active'); status.innerText = "Transmitiendo..."; } };
-        const callar = async () => { if (isReady) { await localAudioTrack.setEnabled(false); btn.classList.remove('active'); status.innerText = "Listo."; } };
-
-        // Eventos de presión
-        btn.onmousedown = hablar; btn.onmouseup = callar;
-        btn.ontouchstart = (e) => { e.preventDefault(); hablar(); };
-        btn.ontouchend = (e) => { e.preventDefault(); callar(); };
-
-        // Escuchar a otros
+        // Suscribirse a otros
         client.on("user-published", async (user, mediaType) => {
             await client.subscribe(user, mediaType);
-            if (mediaType === "audio") user.audioTrack.play();
+            if (mediaType === "audio") {
+                print("Escuchando a un amigo...");
+                user.audioTrack.play();
+            }
         });
+
+        // Eventos de presión (Pointer events sirven para Mouse y Touch)
+        btn.onpointerdown = async (e) => {
+            if (!isJoined) return;
+            e.preventDefault();
+            await localTrack.setEnabled(true);
+            btn.classList.add('talking');
+            btn.innerText = "HABLANDO...";
+            print("Transmitiendo audio...");
+        };
+
+        btn.onpointerup = async () => {
+            if (!isJoined) return;
+            await localTrack.setEnabled(false);
+            btn.classList.remove('talking');
+            btn.innerText = "MANTÉN PULSADO";
+            print("Micrófono cerrado.");
+        };
+
+        btn.onpointerleave = btn.onpointerup;
+
+        // Iniciar al cargar
+        window.onload = init;
     </script>
 </body>
 </html>
