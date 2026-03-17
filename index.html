@@ -3,120 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Radio Walkie-Talkie | Agora</title>
+    <title>Walkie-Talkie Fix</title>
     <style>
-        :root { --primary: #ff3e3e; --bg: #1a1a1d; }
-        body { background: var(--bg); color: white; font-family: 'Courier New', Courier, monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
-        
+        body { background: #121212; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
         #ptt-btn {
-            width: 240px; height: 240px; border-radius: 50%; border: 12px solid #333;
-            background: radial-gradient(circle, var(--primary) 0%, #a31d1d 100%);
-            color: white; font-size: 1.4rem; font-weight: bold; cursor: pointer;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.6); outline: none; transition: all 0.1s;
-            user-select: none; -webkit-tap-highlight-color: transparent;
+            width: 200px; height: 200px; border-radius: 50%; border: 8px solid #333;
+            background: #444; color: #888; font-size: 1.2rem; font-weight: bold;
+            cursor: pointer; transition: 0.2s; outline: none;
         }
-
-        #ptt-btn:active { transform: scale(0.92); filter: brightness(1.3); box-shadow: 0 0 50px var(--primary); }
+        /* Clase cuando el sistema está listo */
+        .ready { background: #e74c3c !important; color: white !important; border-color: #555 !important; box-shadow: 0 0 20px rgba(231,76,60,0.4); }
+        .active { transform: scale(0.9); filter: brightness(1.2); box-shadow: 0 0 40px #ff4d4d !important; }
         
-        .led { width: 15px; height: 15px; border-radius: 50%; background: #444; margin-bottom: 20px; transition: 0.3s; }
-        .led.active { background: #00ff41; box-shadow: 0 0 15px #00ff41; }
-        .led.transmitting { background: #ff3e3e; box-shadow: 0 0 15px #ff3e3e; }
-
-        .status-text { margin-top: 15px; text-transform: uppercase; letter-spacing: 2px; font-size: 0.8rem; color: #888; }
+        #status { margin-top: 20px; font-size: 0.9rem; color: #aaa; text-align: center; padding: 0 20px; }
+        .error-msg { color: #ff4d4d; font-weight: bold; border: 1px solid #ff4d4d; padding: 10px; border-radius: 5px; margin-top: 10px; display: none; }
     </style>
 </head>
 <body>
 
-    <div id="led" class="led"></div>
-    <button id="ptt-btn">CONECTANDO...</button>
-    <div id="status" class="status-text">Iniciando sistema de radio...</div>
+    <button id="ptt-btn">CLIC PARA ENCENDER RADIO</button>
+    
+    <div id="status">El sistema está apagado. Toca el botón para iniciar.</div>
+    <div id="error-box" class="error-msg"></div>
 
     <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
 
     <script>
-        const APP_ID = "eeb52729cbdb4c80a1710e32af5306ca"; // Tu ID integrada
-        const CHANNEL = "sala-general"; 
-        const TOKEN = null;
-
+        const APP_ID = "eeb52729cbdb4c80a1710e32af5306ca";
         const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
         let localAudioTrack = null;
-        
+        let isReady = false;
+
         const btn = document.getElementById('ptt-btn');
         const status = document.getElementById('status');
-        const led = document.getElementById('led');
+        const errorBox = document.getElementById('error-box');
 
-        // Función para el sonido de "Roger" (Pitido de radio)
-        function playRogerBeep() {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(880, ctx.currentTime); // Tono agudo
-            gain.gain.setValueAtTime(0.1, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start();
-            osc.stop(ctx.currentTime + 0.2);
-        }
+        // PASO 1: ACTIVACIÓN POR CLIC (Obligatorio por seguridad)
+        btn.onclick = async () => {
+            if (isReady) return; // Si ya está listo, no hace nada el clic simple
 
-        async function initRadio() {
             try {
-                await client.join(APP_ID, CHANNEL, TOKEN, null);
-                localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+                status.innerText = "Solicitando micrófono...";
                 
-                // IMPORTANTE: Empezamos con el micro silenciado
+                // Unirse al canal
+                await client.join(APP_ID, "sala-general", null, null);
+                
+                // Crear track de audio (Aquí saltará el cartel de "Permitir")
+                localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
                 await localAudioTrack.setEnabled(false);
                 await client.publish(localAudioTrack);
 
+                // Configurar interfaz lista
+                isReady = true;
                 btn.innerText = "MANTÉN PULSADO";
-                led.classList.add('online');
-                status.innerText = "En línea - Canal: " + CHANNEL;
-            } catch (e) {
-                status.innerText = "Error: Permite el uso del micrófono";
-                console.error(e);
-            }
-        }
+                btn.classList.add('ready');
+                status.innerText = "¡CONECTADO! Ya puedes hablar.";
+                errorBox.style.display = "none";
 
-        // Suscribirse a otros amigos cuando hablen
+            } catch (e) {
+                console.error(e);
+                errorBox.style.display = "block";
+                if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+                    errorBox.innerText = "ERROR: Necesitas usar HTTPS o LOCALHOST para que el micrófono funcione.";
+                } else {
+                    errorBox.innerText = "ERROR: No diste permiso al micrófono. Recarga la página e inténtalo de nuevo.";
+                }
+            }
+        };
+
+        // PASO 2: LÓGICA DE HABLAR (Solo después de estar listos)
+        const hablar = async () => { if (isReady) { await localAudioTrack.setEnabled(true); btn.classList.add('active'); status.innerText = "Transmitiendo..."; } };
+        const callar = async () => { if (isReady) { await localAudioTrack.setEnabled(false); btn.classList.remove('active'); status.innerText = "Listo."; } };
+
+        // Eventos de presión
+        btn.onmousedown = hablar; btn.onmouseup = callar;
+        btn.ontouchstart = (e) => { e.preventDefault(); hablar(); };
+        btn.ontouchend = (e) => { e.preventDefault(); callar(); };
+
+        // Escuchar a otros
         client.on("user-published", async (user, mediaType) => {
             await client.subscribe(user, mediaType);
-            if (mediaType === "audio") {
-                user.audioTrack.play();
-                led.classList.add('active'); // Se enciende cuando escuchas a alguien
-            }
+            if (mediaType === "audio") user.audioTrack.play();
         });
-
-        client.on("user-unpublished", () => {
-            led.classList.remove('active');
-            playRogerBeep(); // Suena cuando el otro deja de hablar
-        });
-
-        // Lógica de Transmisión
-        const startTalking = async () => {
-            if (!localAudioTrack) return;
-            await localAudioTrack.setEnabled(true);
-            btn.innerText = "TRANSMITIENDO";
-            led.classList.add('transmitting');
-            status.innerText = "Tu voz está en el aire...";
-        };
-
-        const stopTalking = async () => {
-            if (!localAudioTrack) return;
-            await localAudioTrack.setEnabled(false);
-            btn.innerText = "MANTÉN PULSADO";
-            led.classList.remove('transmitting');
-            status.innerText = "Cambio y corto.";
-            playRogerBeep();
-        };
-
-        // Eventos
-        btn.onmousedown = startTalking;
-        btn.onmouseup = stopTalking;
-        btn.ontouchstart = (e) => { e.preventDefault(); startTalking(); };
-        btn.ontouchend = (e) => { e.preventDefault(); stopTalking(); };
-
-        initRadio();
     </script>
 </body>
 </html>
