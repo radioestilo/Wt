@@ -88,7 +88,7 @@
         // --- FUNCIÓN DE INICIO (GESTO DEL USUARIO) ---
         async function bootSystem() {
             try {
-                updateDisplay("CONECTANDO...<br>BUSCANDO SEÑAL");
+                updateDisplay("CONECTANDO Club 24...<br>BUSCANDO SEÑAL");
                 btn.innerText = "...";
                 
                 await client.join(APP_ID, CHANNEL, null, null);
@@ -105,7 +105,7 @@
                 btn.innerText = "PTT";
                 btn.classList.add('ready');
                 led.classList.add('led-on');
-                updateDisplay("CONECTADO OK<br>CANAL: GENERAL");
+                updateDisplay("CONECTADO OK Club 24<br>CANAL: GENERAL");
                 playSound(880, 0.1);
 
             } catch (err) {
@@ -124,7 +124,7 @@
             e.preventDefault();
             await localAudioTrack.setEnabled(true);
             btn.classList.add('active');
-            updateDisplay("TRANSMITIENDO...<br>>>>>>>>>");
+            updateDisplay("TRANSMITIENDO CLUB 24...<br>>>>>>>>>");
             playSound(600, 0.05);
         };
 
