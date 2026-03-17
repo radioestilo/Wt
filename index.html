@@ -3,44 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Radio Comms Pro</title>
+    <title>Radio Comms Ultra</title>
     <style>
-        :root { --danger: #ff4b2b; --success: #00ff41; --dark: #0f0f0f; }
-        
-        body { 
-            background: var(--dark); color: white; font-family: 'Segoe UI', Roboto, sans-serif;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100vh; margin: 0; touch-action: none; overflow: hidden;
-        }
+        :root { --danger: #ff4b2b; --success: #00ff41; --dark: #0f0f0f; --neon: #00d4ff; }
+        body { background: var(--dark); color: white; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; touch-action: none; overflow: hidden; }
 
-        /* Contenedor de la Radio */
-        .radio-container {
-            position: relative; width: 280px; height: 400px;
-            background: #222; border-radius: 40px; border: 4px solid #333;
-            display: flex; flex-direction: column; align-items: center; padding: 20px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
-        }
+        .radio-container { position: relative; width: 300px; height: 450px; background: #222; border-radius: 40px; border: 4px solid #333; display: flex; flex-direction: column; align-items: center; padding: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
 
-        /* Pantalla de Estado */
-        #display {
-            width: 80%; height: 60px; background: #1a3a1a; border: 3px solid #000;
-            border-radius: 10px; margin-bottom: 30px; padding: 10px;
-            color: var(--success); font-family: monospace; font-size: 0.7rem;
-            overflow: hidden; box-shadow: inset 0 0 10px #000;
-        }
+        /* Pantalla mejorada */
+        #display { width: 85%; height: 80px; background: #0a1a0a; border: 2px solid #333; border-radius: 10px; margin-bottom: 20px; padding: 10px; color: var(--success); font-family: monospace; font-size: 0.75rem; box-shadow: inset 0 0 15px #000; display: flex; flex-direction: column; justify-content: space-between; }
 
-        /* Botón PTT */
-        #ptt-btn {
-            width: 180px; height: 180px; border-radius: 50%; border: 10px solid #111;
-            background: #333; color: #555; font-size: 1.2rem; font-weight: bold;
-            cursor: pointer; outline: none; transition: 0.2s;
-            -webkit-tap-highlight-color: transparent;
-        }
+        .user-count { color: var(--neon); font-weight: bold; font-size: 0.8rem; }
 
-        /* Botón cuando el sistema está en línea */
-        .online { background: radial-gradient(circle, #444 0%, #222 100%) !important; color: #888 !important; border-color: #333 !important; }
-        .ready { background: radial-gradient(circle, var(--danger) 0%, #8b0000 100%) !important; color: white !important; border-color: #444 !important; box-shadow: 0 0 20px rgba(255,0,0,0.3); }
-        .active { transform: scale(0.92); filter: brightness(1.3); box-shadow: 0 0 40px var(--danger) !important; }
+        #ptt-btn { width: 160px; height: 160px; border-radius: 50%; border: 10px solid #111; background: #333; color: #555; font-size: 1.2rem; font-weight: bold; cursor: pointer; outline: none; transition: 0.2s; -webkit-tap-highlight-color: transparent; }
+
+        .ready { background: radial-gradient(circle, var(--danger) 0%, #8b0000 100%) !important; color: white !important; border-color: #444 !important; box-shadow: 0 0 25px rgba(255,0,0,0.4); }
+        .active { transform: scale(0.92); filter: brightness(1.3); box-shadow: 0 0 50px var(--danger) !important; }
 
         .led { width: 12px; height: 12px; border-radius: 50%; background: #000; margin-bottom: 10px; border: 2px solid #333; }
         .led-on { background: var(--success); box-shadow: 0 0 10px var(--success); }
@@ -50,9 +28,12 @@
 
     <div class="radio-container">
         <div id="led" class="led"></div>
-        <div id="display">SISTEMA APAGADO<br>PRESIONE BOTÓN PARA INICIAR</div>
+        <div id="display">
+            <div id="status-line">SISTEMA APAGADO</div>
+            <div class="user-count">EN LÍNEA: <span id="counter">0</span></div>
+        </div>
         <button id="ptt-btn">ENCENDER</button>
-        <p style="font-size: 0.6rem; color: #555; margin-top: 20px;">FREQUENCY: 446.0 MHz</p>
+        <p style="font-size: 0.6rem; color: #555; margin-top: 30px;">SECURE COMMS v4.0</p>
     </div>
 
     <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
@@ -62,93 +43,119 @@
         const CHANNEL = "sala-general";
         
         const btn = document.getElementById('ptt-btn');
-        const display = document.getElementById('display');
+        const statusLine = document.getElementById('status-line');
+        const counterText = document.getElementById('counter');
         const led = document.getElementById('led');
 
         let client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
         let localAudioTrack = null;
         let isOnline = false;
 
-        function updateDisplay(msg) {
-            display.innerHTML = msg.toUpperCase();
-        }
-
-        // Sonido de Roger Beep
-        function playSound(f, d) {
+        // --- SISTEMA DE SONIDOS ---
+        function playSound(freq, vol, dur) {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const o = ctx.createOscillator();
             const g = ctx.createGain();
             o.connect(g); g.connect(ctx.destination);
-            o.frequency.value = f;
-            g.gain.setValueAtTime(0.1, ctx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + d);
-            o.start(); o.stop(ctx.currentTime + d);
+            o.frequency.value = freq;
+            g.gain.setValueAtTime(vol, ctx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
+            o.start(); o.stop(ctx.currentTime + dur);
         }
 
-        // --- FUNCIÓN DE INICIO (GESTO DEL USUARIO) ---
+        // Pitido fuerte para nuevos usuarios
+        function playAlertJoin() {
+            playSound(1200, 0.4, 0.5); // Tono alto y fuerte
+        }
+
+        // --- SISTEMA DE NOTIFICACIONES ---
+        async function requestNotifyPermission() {
+            if ("Notification" in window) {
+                await Notification.requestPermission();
+            }
+        }
+
+        function sendNotification(title, body) {
+            // Solo avisar si la app no está visible
+            if (document.visibilityState === "hidden" && Notification.permission === "granted") {
+                new Notification(title, { body: body, icon: 'https://cdn-icons-png.flaticon.com/512/1082/1082810.png' });
+            }
+        }
+
+        // --- LÓGICA DE USUARIOS ---
+        function updatePeerCount() {
+            // Usuarios remotos + tú
+            const total = client.remoteUsers.length + 1;
+            counterText.innerText = total;
+        }
+
         async function bootSystem() {
             try {
-                updateDisplay("CONECTANDO Club 24...<br>BUSCANDO SEÑAL");
-                btn.innerText = "...";
+                statusLine.innerText = "CONECTANDO...";
+                await requestNotifyPermission();
                 
                 await client.join(APP_ID, CHANNEL, null, null);
-                
-                // Pidiendo micro
                 localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({ AEC: true, ANS: true });
                 
-                // Publicar para que Agora acepte el canal
                 await client.publish(localAudioTrack);
-                // Silenciar inmediatamente
                 await localAudioTrack.setEnabled(false);
 
                 isOnline = true;
                 btn.innerText = "PTT";
                 btn.classList.add('ready');
                 led.classList.add('led-on');
-                updateDisplay("CONECTADO OK Club 24<br>CANAL: GENERAL");
-                playSound(880, 0.1);
+                statusLine.innerText = "CANAL: GENERAL";
+                updatePeerCount();
+                playSound(880, 0.1, 0.2);
 
             } catch (err) {
-                updateDisplay("ERROR CRÍTICO<br>" + err.message);
+                statusLine.innerText = "ERROR: " + err.message.substring(0, 15);
                 btn.innerText = "REINTENTAR";
-                console.error(err);
             }
         }
 
-        // Lógica de Transmisión
-        const startTalking = async (e) => {
-            if (!isOnline) {
-                await bootSystem();
-                return;
-            }
-            e.preventDefault();
-            await localAudioTrack.setEnabled(true);
-            btn.classList.add('active');
-            updateDisplay("TRANSMITIENDO CLUB 24...<br>>>>>>>>>");
-            playSound(600, 0.05);
-        };
+        // EVENTOS DE RED (AGORA)
+        client.on("user-joined", (user) => {
+            updatePeerCount();
+            playAlertJoin(); // Pitido fuerte
+            sendNotification("Radio Alerta", "Un nuevo integrante se ha unido al canal.");
+            statusLine.innerText = "NUEVO USUARIO ENTRÓ";
+            setTimeout(() => { if(isOnline) statusLine.innerText = "CANAL: GENERAL"; }, 3000);
+        });
 
-        const stopTalking = async () => {
-            if (!isOnline) return;
-            await localAudioTrack.setEnabled(false);
-            btn.classList.remove('active');
-            updateDisplay("EN ESPERA...<br>READY");
-            playSound(440, 0.15);
-        };
+        client.on("user-left", (user) => {
+            updatePeerCount();
+            statusLine.innerText = "USUARIO SALIÓ";
+            setTimeout(() => { if(isOnline) statusLine.innerText = "CANAL: GENERAL"; }, 3000);
+        });
 
-        // Eventos unificados (Móvil y PC)
-        btn.onpointerdown = startTalking;
-        btn.onpointerup = stopTalking;
-        btn.onpointerleave = stopTalking;
-
-        // Escuchar a otros
         client.on("user-published", async (user, mediaType) => {
             await client.subscribe(user, mediaType);
             if (mediaType === "audio") {
-                updateDisplay("RECIBIENDO...<br>SEÑAL ENTRANTE");
+                statusLine.innerText = "RECIBIENDO...";
                 user.audioTrack.play();
             }
         });
+
+        // LÓGICA PUSH TO TALK
+        btn.onpointerdown = async (e) => {
+            if (!isOnline) { await bootSystem(); return; }
+            e.preventDefault();
+            await localAudioTrack.setEnabled(true);
+            btn.classList.add('active');
+            statusLine.innerText = "TRANSMITIENDO...";
+            playSound(600, 0.05, 0.1);
+        };
+
+        btn.onpointerup = async () => {
+            if (!isOnline) return;
+            await localAudioTrack.setEnabled(false);
+            btn.classList.remove('active');
+            statusLine.innerText = "CANAL: *Club 24";
+            playSound(440, 0.1, 0.2);
+        };
+
+        btn.onpointerleave = btn.onpointerup;
     </script>
 </body>
 </html>
