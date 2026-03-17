@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Radio Pro - Global</title>
+    <title>Radio Scanner Global</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
@@ -19,21 +19,21 @@
         }
         #ptt.ready { display: block; border-color: #333; color: #0f0; }
         #ptt:active { background: #f00; color: #fff; box-shadow: 0 0 40px #f00; transform: scale(0.92); }
-        .status { font-size: 0.8rem; margin: 10px 0; color: #ff9d00; font-weight: bold; }
+        .status-box { font-size: 0.8rem; margin: 10px 0; color: #ff9d00; border: 1px dashed #444; padding: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2 style="margin-top:0">SISTEMA GLOBAL</h2>
+    <h2 style="margin-top:0">MODO INTERNET</h2>
     <div id="setup">
         <input type="text" id="room" placeholder="Nombre del Grupo">
         <input type="number" id="my-slot" placeholder="Canal (1-20)" min="1" max="20">
-        <button class="btn" onclick="iniciarRadio()">ENTRAR A RED</button>
+        <button class="btn" onclick="iniciarRadio()">CONECTAR RED MÓVIL/WIFI</button>
     </div>
     <div id="radio-ui" style="display:none">
-        <div id="status" class="status">CONECTANDO...</div>
-        <div id="user-count">0 Compañeros en línea</div>
+        <div id="status" class="status-box">ESTADO: SINCRONIZANDO...</div>
+        <div id="user-count" style="font-size: 0.8rem; color: #888;">0 Compañeros</div>
         <button id="ptt">PULSAR</button>
     </div>
 </div>
@@ -41,7 +41,7 @@
 <div id="audios"></div>
 
 <script>
-    // TU CONFIGURACIÓN DE FIREBASE (EXTRAÍDA DE TU INDEX.HTML)
+    // USANDO TUS CREDENCIALES DE BODEGA VIRTUAL
     const firebaseConfig = {
         apiKey: "AIzaSyD73Fli73cewNUX-Rj6YeZKlb97AcMrqL0",
         authDomain: "bodega-virtual-3e69b.firebaseapp.com",
@@ -58,31 +58,37 @@
     async function iniciarRadio() {
         myRoom = document.getElementById('room').value.trim().toLowerCase();
         const slot = document.getElementById('my-slot').value;
-        if (!myRoom || !slot) return alert("Faltan datos");
+        if (!myRoom || !slot) return alert("Ingresa grupo y canal");
 
         try {
-            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Activar audio con configuraciones de reducción de ruido
+            localStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: { echoCancellation: true, noiseSuppression: true } 
+            });
             localStream.getAudioTracks()[0].enabled = false;
 
-            // PeerJS con servidores TURN para cruzar ciudades (Importante para 4G)
-            peer = new Peer(`MOTO-${myRoom}-${slot}`, {
+            // CONFIGURACIÓN DE CRUCE DE REDES (STUN/TURN)
+            // Esto permite que el audio pase de WiFi a Datos Móviles sin problema
+            peer = new Peer(`RAD-${myRoom}-${slot}`, {
                 config: { 'iceServers': [
                     { 'urls': 'stun:stun.l.google.com:19302' },
-                    { 'urls': 'turn:openrelay.metered.ca:443', 'username': 'openrelayprovider', 'credential': 'openrelayprovider' }
+                    { 
+                        'urls': 'turn:openrelay.metered.ca:443', 
+                        'username': 'openrelayprovider', 
+                        'credential': 'openrelayprovider' 
+                    }
                 ]}
             });
 
             peer.on('open', (id) => {
                 document.getElementById('setup').style.display = 'none';
                 document.getElementById('radio-ui').style.display = 'block';
-                document.getElementById('status').innerText = "ESPERANDO COMPAÑEROS";
+                document.getElementById('status').innerText = "SINTONIZANDO RED...";
 
-                // Registro en Firebase
-                const ref = db.ref(`radio_pro/${myRoom}`);
+                const ref = db.ref(`radio_rooms/${myRoom}`);
                 ref.child(id).set(true);
                 ref.child(id).onDisconnect().remove();
 
-                // Llamar automáticamente a los que aparezcan
                 ref.on('child_added', snap => {
                     if (snap.key !== id && !conexiones[snap.key]) {
                         const call = peer.call(snap.key, localStream);
@@ -96,7 +102,7 @@
                 vincular(call);
             });
 
-        } catch (e) { alert("Usa HTTPS y activa el micrófono"); }
+        } catch (e) { alert("Error: Acceso al micrófono denegado o conexión no segura (HTTPS)."); }
     }
 
     function vincular(call) {
@@ -115,15 +121,15 @@
     function actualizarUI() {
         const total = Object.keys(conexiones).length;
         document.getElementById('user-count').innerText = `${total} Compañeros conectados`;
-        document.getElementById('status').innerText = total > 0 ? "🔴 SEÑAL ACTIVA" : "ESCANEANDO...";
-        document.getElementById('ptt').classList.toggle('ready', true);
+        document.getElementById('status').innerText = total > 0 ? "SEÑAL RECIBIDA" : "ESCANEANDO...";
+        document.getElementById('ptt').classList.add('ready');
     }
 
     const ptt = document.getElementById('ptt');
     function hablar(on) {
         if (localStream) {
             localStream.getAudioTracks()[0].enabled = on;
-            document.getElementById('status').innerText = on ? "TRANSMITIENDO..." : "🔴 SEÑAL ACTIVA";
+            document.getElementById('status').innerText = on ? "TRANSMITIENDO..." : "SEÑAL RECIBIDA";
             document.getElementById('status').style.color = on ? "#f00" : "#0f0";
         }
     }
