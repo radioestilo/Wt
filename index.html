@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sitio en Construcción</title>
+    <style>
+        /* Reseteo básico de márgenes */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            /* Fondo con degradado azul oscuro */
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #ffffff;
+            /* Flexbox para centrar todo perfectamente */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .contenedor {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Estilos para las letras grandes */
+        h1 {
+            font-size: 6vw; /* Tamaño adaptable al ancho de la pantalla */
+            font-weight: 900;
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            text-shadow: 3px 5px 15px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Subtítulo opcional */
+        p {
+            font-size: 1.5rem;
+            margin-top: 20px;
+            color: #d1d8e0;
+            font-weight: 300;
+        }
+
+        /* Círculo de carga animado */
+        .cargando {
+            margin-top: 50px;
+            border: 6px solid rgba(255, 255, 255, 0.2);
+            border-top: 6px solid #ffffff;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: girar 1s linear infinite;
+        }
+
+        /* Animación para el círculo */
+        @keyframes girar {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Ajustes para pantallas de teléfonos móviles */
+        @media (max-width: 768px) {
+            h1 { font-size: 12vw; }
+            p { font-size: 1.2rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="contenedor">
+        <h1>¡ESTAMOS TRABAJANDO!</h1>
+        <p>Está aplicación está en mantenimiento. Vuelve pronto.</p>
+        <div class="cargando"></div>
+    </div>
+
+</body>
+</html>
